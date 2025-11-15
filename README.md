@@ -113,6 +113,33 @@ OPENAI_BASE_URL=  # Optional: leave empty for default, set for custom endpoints
 3. Download credentials
 4. Use the provided URI in your `.env` file
 
+## 🌐 Web Console (Backend + Frontend)
+
+The project now bundles a FastAPI backend and a Vite/React (shadcn-inspired) frontend for managing indexes, documents, and RAG searches.
+
+### Backend API
+
+```bash
+uv run uvicorn backend.app.main:app --reload --port 8000
+```
+
+The API is CORS-enabled (all origins, no credentials) and exposes:
+
+- `GET /api/health` – health check
+- CRUD routes under `/api/indexes`
+- Document management under `/api/indexes/{name}/documents`
+- `POST /api/search` – vector + keyword RAG search
+
+### Frontend Client
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Configure the backend origin via `VITE_API_BASE_URL` (defaults to `http://localhost:8000/api`). The client keeps credentials in `localStorage`, per the project requirements.
+
 ## 📖 Usage
 
 ### Quick Start: Build a Knowledge Graph

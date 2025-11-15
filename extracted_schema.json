@@ -1,0 +1,90 @@
+{
+  "node_types": [
+    {
+      "label": "Person",
+      "description": "",
+      "properties": [],
+      "additional_properties": true
+    },
+    {
+      "label": "Company",
+      "description": "",
+      "properties": [],
+      "additional_properties": true
+    },
+    {
+      "label": "Conference",
+      "description": "",
+      "properties": [],
+      "additional_properties": true
+    },
+    {
+      "label": "Publication",
+      "description": "",
+      "properties": [],
+      "additional_properties": true
+    }
+  ],
+  "relationship_types": [
+    {
+      "label": "WORKS_FOR",
+      "description": "",
+      "properties": [],
+      "additional_properties": true
+    },
+    {
+      "label": "FOUNDERS",
+      "description": "",
+      "properties": [],
+      "additional_properties": true
+    },
+    {
+      "label": "COLLABORATES_WITH",
+      "description": "",
+      "properties": [],
+      "additional_properties": true
+    },
+    {
+      "label": "PUBLISHED_AT",
+      "description": "",
+      "properties": [],
+      "additional_properties": true
+    },
+    {
+      "label": "RECEIVED_AWARD_AT",
+      "description": "",
+      "properties": [],
+      "additional_properties": true
+    }
+  ],
+  "patterns": [
+    [
+      "Person",
+      "WORKS_FOR",
+      "Company"
+    ],
+    [
+      "Person",
+      "FOUNDERS",
+      "Company"
+    ],
+    [
+      "Person",
+      "COLLABORATES_WITH",
+      "Person"
+    ],
+    [
+      "Publication",
+      "PUBLISHED_AT",
+      "Conference"
+    ],
+    [
+      "Person",
+      "RECEIVED_AWARD_AT",
+      "Conference"
+    ]
+  ],
+  "additional_node_types": false,
+  "additional_relationship_types": false,
+  "additional_patterns": false
+}

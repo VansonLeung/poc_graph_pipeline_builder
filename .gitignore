@@ -13,7 +13,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+./lib/
 lib64/
 parts/
 sdist/
@@ -28,6 +28,10 @@ venv/
 env/
 ENV/
 .venv
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
 
 # IDE
 .vscode/
@@ -44,8 +48,8 @@ data/
 *.pdf
 *.txt
 *.csv
-*.json
+./*.json
 
 # Output
 output/
-*.html
+./*.html
