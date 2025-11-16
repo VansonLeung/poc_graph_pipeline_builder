@@ -1,10 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from './ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
-import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { Textarea } from './ui/textarea'
 import { Select } from './ui/select'
+
+const getDefaultFormState = () => ({
+  content: '',
+  metadata: '',
+  buildKg: false,
+  schemaKey: 'business',
+  performEntityResolution: true,
+})
 
 export const DocumentManager = ({
   indexes,
@@ -16,11 +23,21 @@ export const DocumentManager = ({
   onUpdateDocument,
   onDeleteDocument,
 }) => {
-  const [form, setForm] = useState({ content: '', metadata: '' })
+  const [form, setForm] = useState(() => getDefaultFormState())
   const [editingDoc, setEditingDoc] = useState(null)
 
+  const schemaOptions = useMemo(
+    () => [
+      { value: 'auto', label: 'Auto-extract schema from this content' },
+      { value: 'business', label: 'Business preset' },
+      { value: 'academic', label: 'Academic preset' },
+      { value: '', label: 'Use builder default' },
+    ],
+    [],
+  )
+
   useEffect(() => {
-    setForm({ content: '', metadata: '' })
+    setForm(getDefaultFormState())
     setEditingDoc(null)
   }, [selectedIndex])
 
@@ -35,20 +52,44 @@ export const DocumentManager = ({
         return
       }
     }
+
+    if (form.buildKg) {
+      metadata.build_kg = true
+      if (form.schemaKey) {
+        metadata.schema_key = form.schemaKey
+      }
+      metadata.perform_entity_resolution = form.performEntityResolution
+    }
+
     const payload = { content: form.content, metadata }
     if (editingDoc) {
       onUpdateDocument(selectedIndex, editingDoc.doc_id, payload).then(() => {
         setEditingDoc(null)
-        setForm({ content: '', metadata: '' })
+        setForm(getDefaultFormState())
       })
     } else {
-      onCreateDocument(selectedIndex, payload).then(() => setForm({ content: '', metadata: '' }))
+      onCreateDocument(selectedIndex, payload).then(() => setForm(getDefaultFormState()))
     }
   }
 
   const handleEdit = (doc) => {
     setEditingDoc(doc)
-    setForm({ content: doc.content, metadata: JSON.stringify(doc.metadata || {}, null, 2) })
+    const editableMetadata = { ...(doc.metadata || {}) }
+    const buildKg = Boolean(editableMetadata.build_kg)
+    const schemaKey = editableMetadata.schema_key || 'business'
+    const performEntityResolution =
+      editableMetadata.perform_entity_resolution ?? form.performEntityResolution
+    delete editableMetadata.build_kg
+    delete editableMetadata.schema_key
+    delete editableMetadata.perform_entity_resolution
+
+    setForm({
+      content: doc.content,
+      metadata: JSON.stringify(editableMetadata, null, 2),
+      buildKg,
+      schemaKey,
+      performEntityResolution,
+    })
   }
 
   return (
@@ -109,6 +150,63 @@ export const DocumentManager = ({
                     onChange={(e) => setForm((prev) => ({ ...prev, metadata: e.target.value }))}
                   />
                 </div>
+                <div className="space-y-3 rounded-lg border border-slate-800 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="build-kg" className="text-base">
+                        Build knowledge graph from this content
+                      </Label>
+                      <p className="text-xs text-slate-400">
+                        Mirrors the workflows from example_kg_builder.py (schema selection + entity resolution).
+                      </p>
+                    </div>
+                    <input
+                      id="build-kg"
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={form.buildKg}
+                      onChange={(e) => setForm((prev) => ({ ...prev, buildKg: e.target.checked }))}
+                    />
+                  </div>
+                  {form.buildKg ? (
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="schema-select">Schema strategy</Label>
+                        <Select
+                          id="schema-select"
+                          value={form.schemaKey}
+                          onChange={(e) => setForm((prev) => ({ ...prev, schemaKey: e.target.value }))}
+                        >
+                          {schemaOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </Select>
+                        <p className="text-xs text-slate-400">
+                          Choose “Auto-extract” to infer a schema from this document before ingesting.
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="entity-resolution" className="text-sm">
+                            Perform entity resolution
+                          </Label>
+                          <p className="text-xs text-slate-400">Exact/semantic/fuzzy passes per builder config.</p>
+                        </div>
+                        <input
+                          id="entity-resolution"
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={form.performEntityResolution}
+                          onChange={(e) =>
+                            setForm((prev) => ({ ...prev, performEntityResolution: e.target.checked }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
                 <div className="flex gap-2">
                   <Button type="submit" className="flex-1">
                     {editingDoc ? 'Save changes' : 'Add document'}
@@ -136,6 +234,11 @@ export const DocumentManager = ({
                   <div key={doc.doc_id} className="rounded-lg border border-slate-800 bg-slate-900/70 p-4">
                     <p className="font-medium text-slate-100">{doc.doc_id}</p>
                     <p className="mt-2 text-sm text-slate-300 line-clamp-3">{doc.content}</p>
+                    {doc.metadata && Object.keys(doc.metadata || {}).length ? (
+                      <pre className="mt-3 whitespace-pre-wrap rounded bg-slate-950/60 p-3 text-xs text-slate-300">
+                        {JSON.stringify(doc.metadata, null, 2)}
+                      </pre>
+                    ) : null}
                     <div className="mt-4 flex gap-2">
                       <Button variant="outline" size="sm" onClick={() => handleEdit(doc)}>
                         Edit

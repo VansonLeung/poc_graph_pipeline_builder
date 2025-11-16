@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
+
 from neo4j import Driver
-from neo4j.exceptions import ConstraintError
-from datetime import datetime
+from neo4j.graph import Node
 
 
 class Neo4jRepository:
@@ -97,7 +99,7 @@ class Neo4jRepository:
         )
         with self.driver.session() as session:
             records = session.run(query, index_name=index_name)
-            return [record["d"] for record in records]
+            return [self._node_to_dict(record["d"]) for record in records]
 
     def get_document(self, index_name: str, doc_id: str) -> Optional[Dict[str, Any]]:
         query = (
@@ -106,7 +108,7 @@ class Neo4jRepository:
         )
         with self.driver.session() as session:
             record = session.run(query, index_name=index_name, doc_id=doc_id).single()
-            return record["d"] if record else None
+            return self._node_to_dict(record["d"]) if record else None
 
     def create_document(
         self,
@@ -117,33 +119,24 @@ class Neo4jRepository:
     ) -> Dict[str, Any]:
         doc_id = str(uuid4())
         now = datetime.utcnow().isoformat()
-        
-        metadata_query = ""
-        for key in metadata.keys():
-            metadata_query += f"    d.{key} = ${key},\n"
-        
-        query = (
-            f"CREATE (d:{self.DOCUMENT_LABEL}) "
-            f" SET {metadata_query} "
-            "    d.doc_id = $doc_id, "
-            "    d.index_name = $index_name, "
-            "    d.content = $content, "
-            "    d.embedding = $embedding, "
-            "    d.created_at = $now, "
-            "    d.updated_at = $now "
-            "RETURN d"
-        )
-        params = {
-            **metadata,
+        metadata_json = json.dumps(metadata or {})
+        document_payload = {
             "doc_id": doc_id,
             "index_name": index_name,
             "content": content,
+            "metadata_json": metadata_json,
             "embedding": embedding,
-            "now": now,
+            "created_at": now,
+            "updated_at": now,
         }
+        query = (
+            f"CREATE (d:{self.DOCUMENT_LABEL}) "
+            "SET d = $payload "
+            "RETURN d"
+        )
         with self.driver.session() as session:
-            record = session.run(query, **params).single()
-            return record["d"]
+            record = session.run(query, payload=document_payload).single()
+            return self._node_to_dict(record["d"])
 
     def update_document(
         self,
@@ -163,8 +156,8 @@ class Neo4jRepository:
             assignments.append("d.content = $content")
             params["content"] = content
         if metadata is not None:
-            assignments.append("d.metadata = $metadata")
-            params["metadata"] = metadata
+            assignments.append("d.metadata_json = $metadata_json")
+            params["metadata_json"] = json.dumps(metadata)
         if embedding is not None:
             assignments.append("d.embedding = $embedding")
             params["embedding"] = embedding
@@ -178,7 +171,7 @@ class Neo4jRepository:
         )
         with self.driver.session() as session:
             record = session.run(query, **params).single()
-            return record["d"] if record else None
+            return self._node_to_dict(record["d"]) if record else None
 
     def delete_document(self, index_name: str, doc_id: str) -> None:
         query = (
@@ -203,7 +196,7 @@ class Neo4jRepository:
             "WHERE node.index_name = $index_name "
             "  AND ($keywords IS NULL OR size($keywords) = 0 OR any(keyword IN $keywords "
             "      WHERE toLower(node.content) CONTAINS toLower(keyword))) "
-            "RETURN node.doc_id AS doc_id, node.content AS content, score "
+            "RETURN node.doc_id AS doc_id, node.content AS content, node.metadata_json AS metadata_json, score "
             "ORDER BY score DESC LIMIT $top_k"
         )
         params = {
@@ -216,4 +209,31 @@ class Neo4jRepository:
         }
         with self.driver.session() as session:
             result = session.run(query, **params)
-            return [dict(record) for record in result]
+            chunks = []
+            for record in result:
+                metadata_json = record.get("metadata_json")
+                metadata = json.loads(metadata_json) if metadata_json else {}
+                chunks.append(
+                    {
+                        "doc_id": record["doc_id"],
+                        "content": record["content"],
+                        "metadata": metadata,
+                        "score": record["score"],
+                    }
+                )
+            return chunks
+
+    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _node_to_dict(node: Node) -> Dict[str, Any]:
+        data = dict(node)
+        metadata_json = data.pop("metadata_json", None)
+        if metadata_json:
+            try:
+                data["metadata"] = json.loads(metadata_json)
+            except json.JSONDecodeError:
+                data["metadata"] = {}
+        else:
+            data["metadata"] = {}
+        return data
