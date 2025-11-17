@@ -94,7 +94,7 @@ class Neo4jRepository:
     # Document operations --------------------------------------------------
     def list_documents(self, index_name: str) -> List[Dict[str, Any]]:
         query = (
-            f"MATCH (d:{self.DOCUMENT_LABEL} {{index_name: $index_name}}) "
+            f"MATCH (i:{self.INDEX_LABEL} {{name: $index_name}})-[:HAS_DOCUMENT]->(d:{self.DOCUMENT_LABEL}) "
             "RETURN d ORDER BY d.updated_at DESC"
         )
         with self.driver.session() as session:
@@ -103,7 +103,7 @@ class Neo4jRepository:
 
     def get_document(self, index_name: str, doc_id: str) -> Optional[Dict[str, Any]]:
         query = (
-            f"MATCH (d:{self.DOCUMENT_LABEL} {{index_name: $index_name, doc_id: $doc_id}}) "
+            f"MATCH (i:{self.INDEX_LABEL} {{name: $index_name}})-[:HAS_DOCUMENT]->(d:{self.DOCUMENT_LABEL} {{doc_id: $doc_id}}) "
             "RETURN d"
         )
         with self.driver.session() as session:
@@ -130,12 +130,15 @@ class Neo4jRepository:
             "updated_at": now,
         }
         query = (
-            f"CREATE (d:{self.DOCUMENT_LABEL}) "
+            f"MATCH (i:{self.INDEX_LABEL} {{name: $index_name}}) "
+            f"CREATE (i)-[:HAS_DOCUMENT]->(d:{self.DOCUMENT_LABEL}) "
             "SET d = $payload "
             "RETURN d"
         )
         with self.driver.session() as session:
-            record = session.run(query, payload=document_payload).single()
+            record = session.run(query, payload=document_payload, index_name=index_name).single()
+            if not record:
+                raise ValueError(f"Index {index_name} not found")
             return self._node_to_dict(record["d"])
 
     def update_document(
@@ -166,7 +169,7 @@ class Neo4jRepository:
         else:
             set_clause = "SET " + ", ".join(assignments)
         query = (
-            f"MATCH (d:{self.DOCUMENT_LABEL} {{index_name: $index_name, doc_id: $doc_id}}) "
+            f"MATCH (i:{self.INDEX_LABEL} {{name: $index_name}})-[:HAS_DOCUMENT]->(d:{self.DOCUMENT_LABEL} {{doc_id: $doc_id}}) "
             f"{set_clause} RETURN d"
         )
         with self.driver.session() as session:
@@ -175,7 +178,7 @@ class Neo4jRepository:
 
     def delete_document(self, index_name: str, doc_id: str) -> None:
         query = (
-            f"MATCH (d:{self.DOCUMENT_LABEL} {{index_name: $index_name, doc_id: $doc_id}}) "
+            f"MATCH (i:{self.INDEX_LABEL} {{name: $index_name}})-[:HAS_DOCUMENT]->(d:{self.DOCUMENT_LABEL} {{doc_id: $doc_id}}) "
             "DETACH DELETE d"
         )
         with self.driver.session() as session:
